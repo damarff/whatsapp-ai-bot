@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  fastapi:
+    build: ./fastapi-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
+      - DASHSCOPE_BASE_URL=${DASHSCOPE_BASE_URL:-https://ws-10pbqe8kpewehk1o.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1}
+      - AI_MODEL=${AI_MODEL:-qwen3.6-plus}
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+  baileys:
+    build: ./baileys-server
+    ports:
+      - "3000:3000"
+    environment:
+      - FASTAPI_URL=http://fastapi:8000
+      - PORT=3000
+    volumes:
+      - ./sessions:/app/sessions
+    depends_on:
+      - fastapi
+    restart: unless-stopped
+
+  dashboard:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./dashboard:/usr/share/nginx/html:ro
+    restart: unless-stopped

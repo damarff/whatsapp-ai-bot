@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp AI Bot Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #111b21; color: #e9edef; }
+        
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        
+        header { background: #202c33; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+        header h1 { color: #00a884; font-size: 24px; }
+        header p { color: #8696a0; margin-top: 5px; }
+        
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        
+        .stat-card { background: #202c33; padding: 20px; border-radius: 10px; text-align: center; }
+        .stat-card .number { font-size: 32px; font-weight: bold; color: #00a884; }
+        .stat-card .label { color: #8696a0; margin-top: 5px; }
+        
+        .status { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 20px; font-size: 14px; }
+        .status.connected { background: rgba(0, 168, 132, 0.2); color: #00a884; }
+        .status.disconnected { background: rgba(234, 67, 53, 0.2); color: #ea4335; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .status.connected .status-dot { background: #00a884; }
+        .status.disconnected .status-dot { background: #ea4335; }
+        
+        .conversations { background: #202c33; border-radius: 10px; overflow: hidden; }
+        .conversations h2 { padding: 15px 20px; background: #2a3942; font-size: 16px; }
+        
+        .conversation-list { max-height: 400px; overflow-y: auto; }
+        
+        .conversation-item { padding: 15px 20px; border-bottom: 1px solid #2a3942; cursor: pointer; transition: background 0.2s; }
+        .conversation-item:hover { background: #2a3942; }
+        .conversation-item .phone { font-weight: 500; }
+        .conversation-item .last-message { color: #8696a0; font-size: 14px; margin-top: 4px; }
+        .conversation-item .time { color: #8696a0; font-size: 12px; float: right; }
+        
+        .qr-section { background: #202c33; padding: 20px; border-radius: 10px; margin-bottom: 20px; text-align: center; }
+        .qr-section h3 { margin-bottom: 10px; }
+        #qr-code { background: white; padding: 20px; border-radius: 10px; display: inline-block; }
+        
+        .refresh-btn { background: #00a884; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 14px; }
+        .refresh-btn:hover { background: #008f6f; }
+        
+        @media (max-width: 600px) {
+            .stats-grid { grid-template-columns: 1fr 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 WhatsApp AI Bot</h1>
+            <p>Dashboard untuk monitor & manage bot</p>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="number" id="total-conversations">-</div>
+                <div class="label">Total Conversations</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="total-messages">-</div>
+                <div class="label">Total Messages</div>
+            </div>
+            <div class="stat-card">
+                <div id="connection-status" class="status disconnected">
+                    <span class="status-dot"></span>
+                    <span>Checking...</span>
+                </div>
+                <div class="label" style="margin-top: 10px;">WhatsApp Status</div>
+            </div>
+        </div>
+
+        <div class="qr-section" id="qr-section" style="display: none;">
+            <h3>📱 Scan QR Code with WhatsApp</h3>
+            <div id="qr-code"></div>
+        </div>
+
+        <div class="conversations">
+            <h2>💬 Recent Conversations</h2>
+            <div class="conversation-list" id="conversation-list">
+                <div class="conversation-item">
+                    <div class="last-message">Loading...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        const BAILEYS_URL = 'http://localhost:3000';
+
+        async function checkStatus() {
+            try {
+                const res = await fetch(`${BAILEYS_URL}/status`);
+                const data = await res.json();
+                const statusEl = document.getElementById('connection-status');
+                
+                if (data.connected) {
+                    statusEl.className = 'status connected';
+                    statusEl.innerHTML = '<span class="status-dot"></span><span>Connected</span>';
+                    document.getElementById('qr-section').style.display = 'none';
+                } else {
+                    statusEl.className = 'status disconnected';
+                    statusEl.innerHTML = '<span class="status-dot"></span><span>Disconnected</span>';
+                    document.getElementById('qr-section').style.display = 'block';
+                }
+            } catch (e) {
+                console.error('Status check failed:', e);
+            }
+        }
+
+        async function loadStats() {
+            try {
+                const res = await fetch(`${API_URL}/stats`);
+                const data = await res.json();
+                
+                document.getElementById('total-conversations').textContent = data.total_conversations;
+                document.getElementById('total-messages').textContent = data.total_messages;
+                
+                const listEl = document.getElementById('conversation-list');
+                if (data.recent_conversations.length === 0) {
+                    listEl.innerHTML = '<div class="conversation-item"><div class="last-message">No conversations yet</div></div>';
+                    return;
+                }
+                
+                listEl.innerHTML = data.recent_conversations.map(c => `
+                    <div class="conversation-item">
+                        <span class="time">${new Date(c.last_message).toLocaleString()}</span>
+                        <div class="phone">${c.phone}</div>
+                        <div class="last-message">${c.message_count} messages</div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error('Stats load failed:', e);
+            }
+        }
+
+        // Initial load
+        checkStatus();
+        loadStats();
+
+        // Auto refresh every 5 seconds
+        setInterval(checkStatus, 5000);
+        setInterval(loadStats, 10000);
+    </script>
+</body>
+</html>
